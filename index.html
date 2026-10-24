@@ -1,0 +1,422 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sketchy - Lined Notebook Canvas</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for Notebook aesthetic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* Custom styles for handwritten header font and touch prevention */
+        .font-handwritten {
+            font-family: 'Caveat', cursive;
+        }
+
+        /* Prevent unwanted scrolling and touch selection during canvas drawing */
+        body, html {
+            overscroll-behavior: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Lined Notebook Paper styling */
+        .notebook-paper {
+            background-color: #fdfbf7; /* Slightly aged off-white notebook background */
+            background-image: 
+                /* Red vertical margin line on the left */
+                linear-gradient(90deg, transparent 49px, #f87171 49px, #f87171 51px, transparent 51px),
+                /* Horizontal light blue ruled lines */
+                linear-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 100% 100%, 100% 28px;
+            background-position: 0 0, 0 12px;
+        }
+
+        /* Custom styling for tool selection feedback */
+        .tool-btn {
+            transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+        .tool-btn.active {
+            transform: scale(1.1);
+            ring: 2px;
+        }
+
+        /* Smooth canvas render overlay */
+        #drawingCanvas {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-800 h-screen w-screen flex flex-col justify-between overflow-hidden font-[Inter]">
+
+    <!-- Top Header Navigation -->
+    <header class="bg-slate-800 text-white px-4 py-2 flex items-center justify-between shadow-md z-10 border-b border-slate-700">
+        <!-- App Branding -->
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-pen-nib text-amber-400 text-xl"></i>
+            <h1 class="font-handwritten text-3xl font-bold text-amber-300 tracking-wide select-none">Sketchy</h1>
+        </div>
+
+        <!-- Canvas Actions (Undo, Redo, Clear, Save) -->
+        <div class="flex items-center gap-2">
+            <button id="undoBtn" title="Undo" class="p-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-slate-700 rounded-lg text-slate-200 transition active:scale-95">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button id="redoBtn" title="Redo" class="p-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-slate-700 rounded-lg text-slate-200 transition active:scale-95">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <button id="clearBtn" title="Clear Canvas" class="p-2 bg-red-900/60 hover:bg-red-800 text-red-200 rounded-lg transition active:scale-95">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+            <button id="saveBtn" title="Download Image" class="p-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-lg flex items-center gap-1.5 px-3 transition active:scale-95 shadow">
+                <i class="fa-solid fa-download"></i>
+                <span class="hidden sm:inline text-xs">Save</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Drawing Workspace with Notebook Paper Background -->
+    <main class="relative flex-1 w-full h-full overflow-hidden notebook-paper shadow-inner flex justify-center items-center">
+        <!-- Main HTML5 Drawing Canvas -->
+        <canvas id="drawingCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+        <!-- Floating Size Slider Dialog Overlay -->
+        <div id="thicknessPopup" class="hidden absolute bottom-4 bg-slate-800/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-3 z-20">
+            <i class="fa-solid fa-circle text-xs text-slate-400"></i>
+            <input type="range" id="brushSize" min="1" max="30" value="3" class="w-32 accent-amber-400 cursor-pointer">
+            <i class="fa-solid fa-circle text-lg text-slate-400"></i>
+            <span id="brushSizeDisplay" class="text-xs font-mono font-bold w-6 text-center text-amber-300">3px</span>
+        </div>
+    </main>
+
+    <!-- Bottom Toolbar Controls -->
+    <footer class="bg-slate-800 border-t border-slate-700 px-4 py-3 z-10 flex flex-wrap items-center justify-between gap-2 shadow-lg">
+        <!-- Pen Color & Eraser Presets -->
+        <div class="flex items-center gap-3">
+            <!-- Blue Ballpoint Pen -->
+            <button data-color="#1e40af" data-type="pen" class="tool-btn pen-option active relative w-10 h-10 rounded-full bg-blue-800 border-2 border-white shadow-md flex items-center justify-center text-white focus:outline-none">
+                <i class="fa-solid fa-pen text-xs"></i>
+            </button>
+            <!-- Black Ballpoint Pen -->
+            <button data-color="#1e293b" data-type="pen" class="tool-btn pen-option relative w-10 h-10 rounded-full bg-slate-900 border-2 border-slate-600 shadow-md flex items-center justify-center text-white focus:outline-none">
+                <i class="fa-solid fa-pen text-xs"></i>
+            </button>
+            <!-- Red Ballpoint Pen -->
+            <button data-color="#dc2626" data-type="pen" class="tool-btn pen-option relative w-10 h-10 rounded-full bg-red-600 border-2 border-slate-600 shadow-md flex items-center justify-center text-white focus:outline-none">
+                <i class="fa-solid fa-pen text-xs"></i>
+            </button>
+            <!-- Eraser Tool -->
+            <button data-type="eraser" id="eraserBtn" class="tool-btn relative w-10 h-10 rounded-full bg-slate-700 border-2 border-slate-500 shadow-md flex items-center justify-center text-slate-200 hover:text-white focus:outline-none">
+                <i class="fa-solid fa-eraser text-sm"></i>
+            </button>
+        </div>
+
+        <!-- Thickness Adjuster Toggle & Status Indicator -->
+        <div class="flex items-center gap-2">
+            <button id="toggleThicknessBtn" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-2 border border-slate-600 transition active:scale-95">
+                <i class="fa-solid fa-sliders text-amber-400"></i>
+                <span>Size: <strong id="currentSizeLabel" class="text-amber-300">3px</strong></span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- JavaScript Drawing Logic -->
+    <script>
+        window.onload = function() {
+            const canvas = document.getElementById('drawingCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            const undoBtn = document.getElementById('undoBtn');
+            const redoBtn = document.getElementById('redoBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const brushSizeInput = document.getElementById('brushSize');
+            const brushSizeDisplay = document.getElementById('brushSizeDisplay');
+            const currentSizeLabel = document.getElementById('currentSizeLabel');
+            const toggleThicknessBtn = document.getElementById('toggleThicknessBtn');
+            const thicknessPopup = document.getElementById('thicknessPopup');
+            const penOptions = document.querySelectorAll('.pen-option');
+            const eraserBtn = document.getElementById('eraserBtn');
+
+            // Canvas & Drawing State
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+            let strokeColor = '#1e40af'; // Default Blue ballpoint pen
+            let strokeWidth = 3;
+            let currentMode = 'pen'; // 'pen' or 'eraser'
+            
+            // Undo/Redo History Stacks
+            let historyStack = [];
+            let redoStack = [];
+            const MAX_HISTORY = 25;
+
+            // Resize Canvas dynamically maintaining resolution
+            function resizeCanvas() {
+                // Save canvas contents prior to resizing
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                if (canvas.width > 0 && canvas.height > 0) {
+                    tempCtx.drawImage(canvas, 0, 0);
+                }
+
+                // Match canvas pixels to displayed physical client bounds
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+
+                // Restore previous canvas strokes
+                if (tempCanvas.width > 0 && tempCanvas.height > 0) {
+                    ctx.drawImage(tempCanvas, 0, 0);
+                }
+                
+                // Set smoothing properties
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }
+
+            // Save initial empty state
+            function saveState() {
+                if (historyStack.length >= MAX_HISTORY) {
+                    historyStack.shift();
+                }
+                historyStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+                redoStack = []; // Reset redo on new action
+                updateUndoRedoButtons();
+            }
+
+            function updateUndoRedoButtons() {
+                undoBtn.disabled = historyStack.length <= 1;
+                redoBtn.disabled = redoStack.length === 0;
+            }
+
+            // Get touch/mouse pointer coordinates relative to canvas
+            function getPointerPos(e) {
+                const rect = canvas.getBoundingClientRect();
+                let clientX = e.clientX;
+                let clientY = e.clientY;
+
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
+
+                return {
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
+                };
+            }
+
+            // Start Drawing Event
+            function startDrawing(e) {
+                isDrawing = true;
+                const pos = getPointerPos(e);
+                lastX = pos.x;
+                lastY = pos.y;
+                
+                // Draw initial point for single clicks/taps
+                ctx.beginPath();
+                ctx.arc(lastX, lastY, (currentMode === 'eraser' ? strokeWidth : strokeWidth / 2), 0, Math.PI * 2);
+                
+                if (currentMode === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.fillStyle = 'rgba(0,0,0,1)';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.fillStyle = strokeColor;
+                }
+                ctx.fill();
+            }
+
+            // Drawing Movement Event with Smooth Quadratic Curves
+            function draw(e) {
+                if (!isDrawing) return;
+                e.preventDefault();
+
+                const pos = getPointerPos(e);
+
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                
+                // Smooth interpolation between previous and current touch point
+                const midX = (lastX + pos.x) / 2;
+                const midY = (lastY + pos.y) / 2;
+                ctx.quadraticCurveTo(lastX, lastY, midX, midY);
+
+                if (currentMode === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                    ctx.strokeStyle = 'rgba(0,0,0,1)';
+                    ctx.lineWidth = strokeWidth * 2.5; // Slightly wider touch eraser
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = strokeColor;
+                    ctx.lineWidth = strokeWidth;
+                }
+
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                lastX = pos.x;
+                lastY = pos.y;
+            }
+
+            // Stop Drawing Event
+            function stopDrawing() {
+                if (isDrawing) {
+                    isDrawing = false;
+                    saveState();
+                }
+            }
+
+            // Pointer/Touch Listeners
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            window.addEventListener('mouseup', stopDrawing);
+
+            canvas.addEventListener('touchstart', (e) => { startDrawing(e); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { draw(e); }, { passive: false });
+            window.addEventListener('touchend', stopDrawing);
+
+            // Tool Switcher logic
+            function setTool(mode, color = null) {
+                currentMode = mode;
+                
+                // Update active tool styling
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.classList.remove('active', 'border-white');
+                    btn.classList.add('border-slate-600');
+                });
+
+                if (mode === 'pen') {
+                    strokeColor = color;
+                    penOptions.forEach(btn => {
+                        if (btn.getAttribute('data-color') === color) {
+                            btn.classList.add('active', 'border-white');
+                            btn.classList.remove('border-slate-600');
+                        }
+                    });
+                } else if (mode === 'eraser') {
+                    eraserBtn.classList.add('active', 'border-white');
+                    eraserBtn.classList.remove('border-slate-600');
+                }
+            }
+
+            // Color Selection Handlers
+            penOptions.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const color = btn.getAttribute('data-color');
+                    setTool('pen', color);
+                });
+            });
+
+            // Eraser Tool Handler
+            eraserBtn.addEventListener('click', () => {
+                setTool('eraser');
+            });
+
+            // Brush Thickness Controls
+            brushSizeInput.addEventListener('input', (e) => {
+                strokeWidth = parseInt(e.target.value, 10);
+                brushSizeDisplay.innerText = `${strokeWidth}px`;
+                currentSizeLabel.innerText = `${strokeWidth}px`;
+            });
+
+            toggleThicknessBtn.addEventListener('click', () => {
+                thicknessPopup.classList.toggle('hidden');
+            });
+
+            // Close thickness popup when clicking outside canvas or toolbar
+            document.addEventListener('click', (e) => {
+                if (!toggleThicknessBtn.contains(e.target) && !thicknessPopup.contains(e.target)) {
+                    thicknessPopup.classList.add('hidden');
+                }
+            });
+
+            // Undo Action
+            undoBtn.addEventListener('click', () => {
+                if (historyStack.length > 1) {
+                    redoStack.push(historyStack.pop());
+                    const previousState = historyStack[historyStack.length - 1];
+                    ctx.putImageData(previousState, 0, 0);
+                    updateUndoRedoButtons();
+                }
+            });
+
+            // Redo Action
+            redoBtn.addEventListener('click', () => {
+                if (redoStack.length > 0) {
+                    const nextState = redoStack.pop();
+                    historyStack.push(nextState);
+                    ctx.putImageData(nextState, 0, 0);
+                    updateUndoRedoButtons();
+                }
+            });
+
+            // Clear Canvas
+            clearBtn.addEventListener('click', () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                saveState();
+            });
+
+            // Save Drawing as PNG image with Notebook Paper background generated
+            saveBtn.addEventListener('click', () => {
+                // Create offscreen canvas to merge ruled paper background + drawings
+                const exportCanvas = document.createElement('canvas');
+                exportCanvas.width = canvas.width;
+                exportCanvas.height = canvas.height;
+                const expCtx = exportCanvas.getContext('2d');
+
+                // 1. Fill base paper off-white color
+                expCtx.fillStyle = '#fdfbf7';
+                expCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+
+                // 2. Draw horizontal ruled lines (28px spacing)
+                expCtx.strokeStyle = '#cbd5e1';
+                expCtx.lineWidth = 1;
+                for (let y = 12; y < exportCanvas.height; y += 28) {
+                    expCtx.beginPath();
+                    expCtx.moveTo(0, y);
+                    expCtx.lineTo(exportCanvas.width, y);
+                    expCtx.stroke();
+                }
+
+                // 3. Draw vertical red left margin line
+                expCtx.strokeStyle = '#f87171';
+                expCtx.lineWidth = 2;
+                expCtx.beginPath();
+                expCtx.moveTo(50, 0);
+                expCtx.lineTo(50, exportCanvas.height);
+                expCtx.stroke();
+
+                // 4. Composite drawing canvas on top
+                expCtx.drawImage(canvas, 0, 0);
+
+                // Trigger download
+                const link = document.createElement('a');
+                link.download = 'sketchy-notebook-drawing.png';
+                link.href = exportCanvas.toDataURL('image/png');
+                link.click();
+            });
+
+            // Handle Window Resizing
+            window.addEventListener('resize', resizeCanvas);
+
+            // Initial setup
+            resizeCanvas();
+            saveState(); // Initial state for history
+        };
+    </script>
+</body>
+</html>
+```
